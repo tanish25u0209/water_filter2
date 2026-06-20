@@ -444,6 +444,7 @@ const BACKEND_URL = "https://water-filter-7qdf.onrender.com";
 
 const POLL_MS = 3000; // how often the dashboard polls the backend for status + latest values
 const PENDING_UPDATE_KEY = "vsg_pending_update";
+const MANUAL_VALUES_KEY = "vsg_manual_values";
 
 const DEVICE_PATH = "device1"; // for reference only — the backend owns this schema now
 
@@ -505,6 +506,25 @@ function loadPendingUpdate() {
 
 function clearPendingUpdate() {
   localStorage.removeItem(PENDING_UPDATE_KEY);
+}
+
+function saveManualValues() {
+  const manualValues = {
+    temperature: tempManualInput?.value ?? "",
+    input_tds: tdsInEl?.value ?? "",
+    output_tds: tdsOutEl?.value ?? "",
+    flow: flowEl?.value ?? "",
+  };
+  localStorage.setItem(MANUAL_VALUES_KEY, JSON.stringify(manualValues));
+}
+
+function loadManualValues() {
+  try {
+    const raw = localStorage.getItem(MANUAL_VALUES_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
 }
 
 /* ============================================================
@@ -607,6 +627,17 @@ setInterval(pollLatest, POLL_MS);
 const tdsInEl = document.getElementById("tds-in");
 const tdsOutEl = document.getElementById("tds-out");
 const flowEl = document.getElementById("flow");
+const savedManualValues = loadManualValues();
+
+if (savedManualValues) {
+  if (savedManualValues.input_tds !== undefined && savedManualValues.input_tds !== "") tdsInEl.value = savedManualValues.input_tds;
+  if (savedManualValues.output_tds !== undefined && savedManualValues.output_tds !== "") tdsOutEl.value = savedManualValues.output_tds;
+  if (savedManualValues.flow !== undefined && savedManualValues.flow !== "") flowEl.value = savedManualValues.flow;
+}
+
+if (!tdsInEl.value) tdsInEl.value = 450;
+if (!tdsOutEl.value) tdsOutEl.value = 30;
+if (!flowEl.value) flowEl.value = 2.5;
 
 function clampNonNegative(el) {
   if (parseFloat(el.value) < 0 || el.value === "") el.value = 0;
@@ -650,6 +681,7 @@ document.getElementById("flow-dec").onclick = () => step(flowEl, -0.1);
   el.addEventListener("input", () => {
     clampNonNegative(el);
     recalcEfficiency();
+    saveManualValues();
     document.querySelectorAll(".preset-btn").forEach((b) => b.classList.remove("active"));
   });
 });
@@ -686,6 +718,7 @@ document.getElementById("temp-mode").addEventListener("change", (e) => {
     document.getElementById("temp-value").innerHTML =
       (latestTemp !== null ? latestTemp.toFixed(1) : "—") + ' <span class="unit">°C</span>';
   }
+  saveManualValues();
 });
 
 /* ============================================================
@@ -763,6 +796,7 @@ function applyPreset(name, toastLabel) {
   if (manualMode) {
     tempManualInput.value = p.temp;
   }
+  saveManualValues();
   toast(toastLabel + " preset applied — sending continuously", "ok");
   document.querySelectorAll(".preset-btn").forEach((b) => b.classList.remove("active"));
   document.getElementById("preset-" + name).classList.add("active");
