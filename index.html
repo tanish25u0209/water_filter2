@@ -459,6 +459,7 @@ let lastSeenTimestamp = null;
 // per-sensor live/manual state — mirrors the temperature toggle for TDS in/out and Flow
 const sensorManualState = { tdsIn: true, tdsOut: true, flow: true };
 const liveValues = { tdsIn: null, tdsOut: null, flow: null };
+let manualSubmitInFlight = false;
 
 /* ============================================================
    TOASTS
@@ -527,6 +528,11 @@ function loadManualValues() {
   }
 }
 
+function shouldAcceptLiveValue(field, value) {
+  if (field === "temperature") return typeof value === "number" && Number.isFinite(value);
+  return typeof value === "number" && Number.isFinite(value) && value !== 0;
+}
+
 /* ============================================================
    BACKEND CONNECTION
    The browser never talks to MQTT or Firebase directly anymore.
@@ -571,7 +577,7 @@ async function pollLatest() {
     const live = data.live || {};
     const pickLive = (field, fallback) => (typeof live[field] === "number" ? live[field] : fallback);
 
-    if (typeof pickLive("temperature", data.temperature) === "number") {
+    if (shouldAcceptLiveValue("temperature", pickLive("temperature", data.temperature))) {
       latestTemp = pickLive("temperature", data.temperature);
       if (!manualMode) {
         document.getElementById("temp-value").innerHTML =
@@ -579,7 +585,7 @@ async function pollLatest() {
       }
     }
 
-    if (typeof pickLive("input_tds", data.input_tds) === "number") {
+    if (shouldAcceptLiveValue("input_tds", pickLive("input_tds", data.input_tds))) {
       liveValues.tdsIn = pickLive("input_tds", data.input_tds);
       if (!sensorManualState.tdsIn) {
         document.getElementById("tdsin-value").innerHTML =
@@ -587,7 +593,7 @@ async function pollLatest() {
       }
     }
 
-    if (typeof pickLive("output_tds", data.output_tds) === "number") {
+    if (shouldAcceptLiveValue("output_tds", pickLive("output_tds", data.output_tds))) {
       liveValues.tdsOut = pickLive("output_tds", data.output_tds);
       if (!sensorManualState.tdsOut) {
         document.getElementById("tdsout-value").innerHTML =
@@ -595,7 +601,7 @@ async function pollLatest() {
       }
     }
 
-    if (typeof pickLive("flow", data.flow) === "number") {
+    if (shouldAcceptLiveValue("flow", pickLive("flow", data.flow))) {
       liveValues.flow = pickLive("flow", data.flow);
       if (!sensorManualState.flow) {
         document.getElementById("flow-value").innerHTML =
@@ -867,6 +873,7 @@ async function sendToBackend() {
   const payload = buildPayload();
   const btn = document.getElementById("btn-send");
   btn.disabled = true;
+  manualSubmitInFlight = true;
   try {
     const data = await postPayload(payload);
 
@@ -879,6 +886,7 @@ async function sendToBackend() {
     savePendingUpdate(payload);
     toast("Backend unreachable. Manual values saved and will retry.", "err");
   } finally {
+    manualSubmitInFlight = false;
     btn.disabled = false;
   }
 }
